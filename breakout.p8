@@ -651,7 +651,7 @@ function draw_game()
 
 	if sticky then
 	 local b = balls[1]
-	 local m=0.5*(frame/4%6)+4
+	 local m=0.5*(frame/3%5)+4
 	 pset(b.x+b.dx*m,
 	      b.y+b.dy*m,10)
 	 pset(b.x+b.dx*m*2,
