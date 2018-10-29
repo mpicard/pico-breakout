@@ -1,7 +1,7 @@
 pico-8 cartridge // http://www.pico-8.com
 version 16
 __lua__
- -- core
+-- core
 
 function update_ball(_b)
  if sticky then
@@ -95,6 +95,8 @@ function update_ball(_b)
 
 	 _b.x = next_x
 		_b.y = next_y
+		
+		spawn_trail(_b.x,_b.y)
 		
   -- check ball screen
   if next_y>127 then
@@ -266,14 +268,16 @@ function powerup_start(_t)
 end
 
 function hit_brick(_i,_combo)
-	shake+=0.05
+	shake+=0.06
 	if bricks[_i].t=="b" then
+	 sfx(10)
+	 spawn_brick_particles(_i)
 		bricks[_i].v = false
 		bump_pts(_combo)
-
 	elseif bricks[_i].t=="i" then
 		sfx(10)
 	elseif bricks[_i].t=="h" then
+	 spawn_brick_particles(_i)
 		if powerup==pu.megaball then
 			bricks[_i].v=false
 			bump_pts(_combo)
@@ -282,11 +286,12 @@ function hit_brick(_i,_combo)
 			bricks[_i].t="b"
  	end
 	elseif bricks[_i].t=="p" then
+ 	spawn_brick_particles(_i)
 		bricks[_i].v = false
 		bump_pts(_combo)
 		spawn_pill(bricks[_i].x,bricks[_i].y)
 	elseif bricks[_i].t=="s" then
-	-- todo sfx explosion
+	 -- todo sfx explosion
 		bricks[_i].t="z'"
 		bump_pts(_combo)
 	end
@@ -397,6 +402,7 @@ function _update60()
  frame=(frame+1)%3600
  
  update_blink()
+ update_particles()
  
 	if mode=="game" then
 		update_game()
@@ -409,7 +415,7 @@ function _update60()
 	end
 end
 -->8
--- inits + resets
+-- inits + levels
 
 function _init()
 	cls(2)
@@ -422,10 +428,11 @@ function _init()
  blnk_c = 7
 	level  = 0
 	levels = {}
-	levels[1]="b4/b4"
+	levels[1]="xp8/xp8"
 	--levels[2]="xp8/xs8/xs8"
 	
 	start_timer = -1
+	pz={}
 end
 
 function next_level()
@@ -640,14 +647,6 @@ end
 
 function draw_game()
 	cls(1)
-	-- ui
-	rectfill(0,0,128,6,2)
-	print("♥ "..lives,1,1,7)
-	print("… "..chain,40,1,7)
-	print("◆ "..pts,80,1,7)
-	print("★ "..powerup,110,1,7)
- -- ball & pad
-	rectfill(pad_x,pad_y,pad_x+pad_w,pad_y+pad_h,pad_c)
 
 	if sticky then
 	 local b = balls[1]
@@ -657,7 +656,9 @@ function draw_game()
 	 pset(b.x+b.dx*m*2,
 	      b.y+b.dy*m*2,10)
  end
- 
+
+ draw_particles()
+ 	 
  -- draw balls
  for i=1,#balls do
   local b = balls[i]
@@ -685,12 +686,20 @@ function draw_game()
 	  palt()
 	 end
 	end
+	-- pad
+	rectfill(pad_x,pad_y,pad_x+pad_w,pad_y+pad_h,pad_c)
+	-- ui
+	rectfill(0,0,128,6,2)
+	print("♥ "..lives,1,1,7)
+	print("… "..chain,40,1,7)
+	print("◆ "..pts,80,1,7)
+	print("★ "..powerup,110,1,7)
 end
 
 function _draw()
  pal()
  shake_screen()
- 	
+
 	if mode=="game" then
 		draw_game()
 	elseif mode=="start" then
@@ -755,6 +764,68 @@ function fade_pal()
    col=dpal[col]
   end
  	pal(j,col,1)
+ end
+end
+
+function add_particle(_x,_y,_dx,_dy,_t,_age,_c)
+ local p={}
+ p.x    = _x
+ p.y    = _y
+ p.dx   = _dx
+ p.dy   = _dy
+ p.t    = _t
+ p.a    = _age
+ p.ma   = _age
+ p.c    = _c[0]
+ p.cols = _c
+ add(pz,p)
+end
+
+function spawn_trail(_x,_y)
+ if frame%3==0 then return end
+ local a=rnd()
+ local dx=sin(a)*ball_r*0.4
+ local dy=cos(a)*ball_r*0.4
+ add_particle(_x+dx,_y+dy,0,0,0,20+rnd(15),{5,9,8})
+end
+
+function spawn_brick_particles(_i)
+ local b=bricks[_i]
+ for i=1,10 do
+  local a=rnd()
+  local dx=sin(a)*2
+  local dy=cos(a)*2
+  add_particle(b.x,b.y,dx,dy,1,rnd(20)+10,{7})
+ end
+end
+
+function update_particles()
+ local i,p,ci
+ for i=#pz,1,-1 do
+  p=pz[i]
+  p.a-=1
+  if p.a<=0 then del(pz,p)
+  elseif #p.cols==1 then
+   p.c=p.cols[1]
+  else
+   ci = flr(p.a/p.ma*#p.cols)+1
+   p.c=p.cols[ci]
+  end
+  -- gravity
+  if p.t==1 then p.dy+=0.1 end
+  
+  p.x+=p.dx
+  p.y+=p.dy
+ end
+end
+
+function draw_particles()
+ local p
+ for i=1,#pz do
+  p=pz[i]
+  --if p.t==0 or p.t==1 then
+  pset(p.x,p.y,p.c)
+  --end
  end
 end
 __gfx__
