@@ -1,34 +1,148 @@
 pico-8 cartridge // http://www.pico-8.com
 version 16
 __lua__
--- core
+ -- core
 
-function game_over()
-	mode="gameover"
-	lives=1
-	level=1
-	pts=0
-end
+function update_ball(_b)
+ if sticky then
+		_b.x = pad_x+sticky_x
+		_b.y = pad_y-ball_r-1
+	else
+		-- regular ball physics
+		if powerup==pu.slowdown then
+	  next_x = _b.x+_b.dx/2
+		 next_y = _b.y+_b.dy/2
+ 	else
+		 next_x = _b.x+_b.dx
+		 next_y = _b.y+_b.dy
+	 end
 
-function level_over()
- _draw()
- mode="levelover"
- if btnp(❎) then
- 	next_level()
+		-- ball hit wall
+		if next_x>125 or next_x<2 then
+			next_x = mid(2,next_x,125)
+			_b.dx = -_b.dx
+			sfx(0)
+		end
+
+		if next_y<9 then
+			next_y = mid(9,next_y,127)
+			_b.dy = -_b.dy
+			sfx(0)
+		end
+	
+		-- pad col
+		if ball_box(next_x,next_y,pad_x,pad_y,pad_w,pad_h) then
+			sfx(1)
+			chain = 1
+			if deflx_ballbox(_b.x,_b.y,_b.dx,_b.dy,pad_x,pad_y,pad_w,pad_h) then
+				-- hit side
+				_b.dx = -_b.dx
+				if _b.x<pad_x+pad_w/2 then
+					next_x = pad_x-ball_r
+				else
+					next_x = pad_x+pad_w+ball_r
+				end
+			else
+				-- hit top/bottom
+				_b.dy = -_b.dy
+				if _b.y>pad_y then
+					next_y=pad_y+pad_h+ball_r
+				else --top
+					next_y = pad_y-ball_r
+					if abs(pad_dx)>2 then
+					-- change ang
+						if sign(pad_dx)==sign(_b.dx) then
+							-- flatten ang
+							set_ang(_b,mid(0,_b.ang-1,2))
+						else
+							-- raise ang
+							if _b.ang==2 then
+								_b.dx= -_b._dx
+							else
+								set_ang(_b,mid(0,_b.ang+1,2))
+							end
+						end
+					end
+				end
+			end
+			if powerup==pu.catch then
+			 -- catch
+			 sticky=true
+			 sticky_x = _b.x-pad_x
+			end
+		end
+
+		-- brick col
+		for i=1,#bricks do
+			if bricks[i].v
+				and not(brick_hit)
+				and ball_box(next_x,next_y,bricks[i].x,bricks[i].y,brick_w,brick_h)
+			then
+	 	 if (powerup==pu.megaball
+	 	 	and bricks[i].t=="i")
+	 	 	or powerup!=pu.megaball
+	 	 then
+	  		if deflx_ballbox(_b.x,_b.y,_b.dx,_b.dy,bricks[i].x,bricks[i].y,brick_w,brick_h) then
+	  			_b.dx = -_b.dx
+	  		else
+	  			_b.dy = -_b.dy
+	  		end
+		 	end
+		 	brick_hit = true
+				hit_brick(i,true)
+			end
+		end
+
+	 _b.x = next_x
+		_b.y = next_y
+		
+  -- check ball screen
+  if next_y>127 then
+   sfx(2)
+   if #balls>1 then
+    del(balls,_b)
+    shake+=0.2
+   else
+    lives-=1
+    shake+=0.4
+    if lives<0 then
+     game_over()
+    else
+     serve_ball()
+    end
+   end
+  end
  end
 end
 
 function update_start()
-	if btnp(❎) then
-		next_level()
-	end
+ local ini=60
+ if start_timer>0 then
+  start_timer-=1
+  -- percentage of timer
+  fade=(ini-start_timer)/ini
+ elseif start_timer==-1 then
+  if btnp(❎) then
+   start_timer=ini
+   sfx(12)
+  end
+ elseif start_timer==0 then
+  next_level()
+ end
 end
 
 function update_game()
 	local btn_press = false
-	local brick_hit = false
 	local next_x,next_y,i
 
+	brick_hit = false
+	
+	-- fade in
+	if fade!=0 then
+	 fade-=0.05
+	 if fade<0 then fade=0 end
+	end
+	
 	if powerup==pu.expand then
 	 pad_w = flr(pad_w0*1.5)
 	 ptn_mult = 0.5
@@ -41,13 +155,13 @@ function update_game()
 		pad_dx = -pad_s
 		btn_press = true
 		if sticky then
-			ball_dx=-1
+			balls[1].dx=-1
 		end
 	elseif btn(➡️) then
 		pad_dx = pad_s
 		btn_press = true
 		if sticky then
-		 ball_dx=1
+		 balls[1].dx=1
 		end
 	end
 
@@ -62,119 +176,24 @@ function update_game()
 
 	pad_x += pad_dx
 	pad_x = mid(0,pad_x,127-pad_w)
-
-	if sticky then
-		ball_x = pad_x+sticky_x
-		ball_y = pad_y-ball_r-1
-	else
-		-- regular ball physics
-		if powerup==pu.slowdown then
-	 next_x = ball_x+ball_dx/2
-		 next_y = ball_y+ball_dy/2
-	else
-		 next_x = ball_x+ball_dx
-		 next_y = ball_y+ball_dy
-	end
-
-	-- ball hit wall
-		if next_x>125 or next_x<2 then
-			next_x = mid(2,next_x,125)
-			ball_dx = -ball_dx
-			sfx(0)
-		end
-
-		if next_y<9 then
-			next_y = mid(9,next_y,127)
-			ball_dy = -ball_dy
-			sfx(0)
-		end
-		-- pad col
-		if ball_box(next_x,next_y,pad_x,pad_y,pad_w,pad_h) then
-			sfx(1)
-			chain = 1
-			if deflx_ballbox(ball_x,ball_y,ball_dx,ball_dy,pad_x,pad_y,pad_w,pad_h) then
-				-- hit side
-				ball_dx = -ball_dx
-				if ball_x<pad_x+pad_w/2 then
-					next_x = pad_x-ball_r
-				else
-					next_x = pad_x+pad_w+ball_r
-				end
-			else
-				-- hit top/bottom
-				ball_dy = -ball_dy
-				if ball_y>pad_y then
-					next_y=pad_y+pad_h+ball_r
-				else --top
-					next_y = pad_y-ball_r
-					if abs(pad_dx)>2 then
-					-- change ang
-						if sign(pad_dx)==sign(ball_dx) then
-							-- flatten ang
-							set_ang(mid(0,ball_ang-1,2))
-						else
-							-- raise ang
-							if ball_ang==2 then
-								ball_dx= -ball_dx
-							else
-								set_ang(mid(0,ball_ang+1,2))
-							end
-						end
-					end
-				end
-			end
-			if powerup==pu.catch then
-			 -- catch
-			 sticky=true
-			 sticky_x = ball_x-pad_x
-			end
-		end
-
-		-- brick col
-		for i=1,#bricks do
-			if bricks[i].v
-				and not(brick_hit)
-				and ball_box(next_x,next_y,bricks[i].x,bricks[i].y,brick_w,brick_h)
-			then
-		 if (powerup==pu.megaball
-		 	and bricks[i].t=="i")
-		 	or powerup!=pu.megaball
-		 then
-			if deflx_ballbox(ball_x,ball_y,ball_dx,ball_dy,bricks[i].x,bricks[i].y,brick_w,brick_h) then
-				ball_dx = -ball_dx
-			else
-				ball_dy = -ball_dy
-			end
-			end
-			brick_hit = true
-				hit_brick(i,true)
-			end
-		end
-
-	ball_x = next_x
-		ball_y = next_y
-
-		if next_y>127 then
-		 sfx(2)
-		 lives-=1
-		 if lives<0 then
-			 game_over()
-		 else
-		 	serve_ball()
-		 end
+	
+	-- update balls
+	for i=#balls,1,-1 do
+	 if balls[i] then
+	  update_ball(balls[i])
 	 end
- end -- if sticky
-
+	end
+	
 	-- update pills
-	for i=1,#pills do
+	for i=#pills,1,-1 do
 	 if pills[i] then
 	  pills[i].y+=0.75
 	  if pills[i].y>127 then
-	 	 pills[i]=nil
+	 	 del(pills,pills[i])
 	  elseif colx(pad_x,pad_y,pad_w,pad_h,pills[i].x,pills[i].y,8,4) then
 	  	sfx(11)
 	  	powerup_start(pills[i].t)
-	  	pills[i]=nil
+	  	del(pills,pills[i])
 	  end
 	 end
 	end
@@ -182,15 +201,15 @@ function update_game()
 	check_expls()
 
 	if level_done() then
-	_draw()
-	level_over()
+ 	_draw()
+ 	level_over()
  end
 
  -- powerup timer and reset
 	if powerup!=0 then
 	 powerup_t-=1
 	 if powerup_t<0 then
-		powerup=0
+		 powerup=0
 	 end
 	end
 end
@@ -201,33 +220,53 @@ function powerup_start(_t)
 	ball_c= ball_c0
 
  if _t==pu.slowdown then
-	powerup   = pu.slowdown
-	powerup_t = 600
+ 	powerup   = pu.slowdown
+ 	powerup_t = 600
  elseif _t==pu.life then
-	--powerup   = 0
-	--powerup_t = 0
-	lives+=1
+ 	lives+=1
  elseif _t==pu.catch then
-	powerup   = pu.catch
-	powerup_t = 900
-	pad_c = 11
+ 	powerup   = pu.catch
+ 	powerup_t = 900
+ 	pad_c = 11
  elseif _t==pu.expand then
-	powerup   = pu.expand
-	powerup_t = 600
+ 	powerup   = pu.expand
+ 	powerup_t = 600
  elseif _t==pu.reduce then
-	powerup   = pu.reduce
-	powerup_t = 600
+ 	powerup   = pu.reduce
+ 	powerup_t = 600
  elseif _t==pu.megaball then
-	powerup   = pu.megaball
-	powerup_t = 400
-	ball_c    = 8
+ 	powerup   = pu.megaball
+ 	powerup_t = 400
+ 	ball_c    = 8
  elseif _t==pu.multiball then
-	powerup   = pu.multiball
-	powerup_t = 900
+ 	if powerup != pu.multiball
+   or #balls==1
+  then
+ 	 powerup   = pu.multiball
+ 	 powerup_t = 900
+ 	 -- add balls
+ 	 local b2 = copy_ball(balls[1])
+   local b3 = copy_ball(balls[1])
+   if balls[1].ang==0 then
+    set_ang(b2,1)
+    set_ang(b3,2)
+   elseif balls[1].ang==1 then
+    set_ang(b2,0)
+    set_ang(b3,2)
+   else
+	   set_ang(b2,0)
+	   set_ang(b3,1)  
+   end
+   add(balls,b2)
+   add(balls,b3)
+ 	else
+ 	 powerup_t += 900
+ 	end
  end
 end
 
 function hit_brick(_i,_combo)
+	shake+=0.05
 	if bricks[_i].t=="b" then
 		bricks[_i].v = false
 		bump_pts(_combo)
@@ -254,52 +293,53 @@ function hit_brick(_i,_combo)
 end
 
 function spawn_pill(_x,_y)
+	local p={}
  local _t = flr(rnd(7))+1
- --_t = pu.megaball -- debug1
-	local _pill={}
-	_pill.x=_x
-	_pill.y=_y
-	_pill.t=_t
- add(pills,_pill)
+ _t = pu.multiball -- debug1
+	p.x=_x
+	p.y=_y
+	p.t=_t
+ add(pills,p)
 end
 
 function check_expls()
  for i=1,#bricks do
-	if bricks[i].t=="z'" then
-	 bricks[i].t="z"
-	end
+ 	if bricks[i].t=="z'" then
+ 	 bricks[i].t="z"
+ 	end
  end
  for i=1,#bricks do
-	if bricks[i].t=="z" then
-	 explode_brick(i)
-	end
+ 	if bricks[i].t=="z" then
+	  explode_brick(i)
+	 end
  end
  for i=1,#bricks do
-	if bricks[i].t=="z'" then
-	 bricks[i].t="z"
-	end
+	 if bricks[i].t=="z'" then
+	  bricks[i].t="z"
+ 	end
  end
 end
 
 function explode_brick(_i)
  bricks[_i].v=false
  for j=1,#bricks do
-	if j!=_i
-		and bricks[j].v
-		and abs(bricks[j].x-bricks[_i].x)<=(brick_w+2)
-	 and abs(bricks[j].y-bricks[_i].y)<=(brick_h+2)
-	then
-	 hit_brick(j,false)
-	end
+	 if j!=_i
+	 	and bricks[j].v
+	 	and abs(bricks[j].x-bricks[_i].x)<=(brick_w+2)
+	  and abs(bricks[j].y-bricks[_i].y)<=(brick_h+2)
+ 	then
+   sfx(3)
+	  hit_brick(j,false)
+	 end
  end
 end
 
 function bump_pts(_combo)
  sfx(4+chain)
- pts   += 10 * ptn_mult * chain
+ pts+=10*ptn_mult*chain
 	if _combo then
-	 chain += 1
- 	chain = mid(1,chain,9)
+	 chain+=1
+ 	chain=mid(1,chain,9)
  end
 end
 
@@ -307,63 +347,85 @@ function level_done()
  if #bricks<1 then return true end
 
  for i=1,#bricks do
-	if bricks[i].v
-	 and bricks[i].t!="i"
-	then
-	 return false
-	end
+ 	if bricks[i].v
+ 	 and bricks[i].t!="i"
+ 	then
+	  return false
+	 end
  end
  return true
 end
 
 function update_levelover()
  if btnp(❎) then
-	next_level()
+ 	next_level()
  end
 end
 
 function update_gameover()
+ printh(start_timer)
+ local ini=60
+ if start_timer>0 then
+  start_timer-=1
+  fade=(ini-start_timer)/ini
+ elseif start_timer==-1 then
+  if btnp(❎) then
+ 	 start_timer=ini
+ 	 sfx(12)
+  end 
+ elseif start_timer==0 then
+		_init()
+		next_level()
+ end
+end
+
+function game_over()
+	shake+=0.4
+	mode="gameover"
+	start_timer=-1
+end
+
+function level_over()
+ _draw()
+ mode="levelover"
  if btnp(❎) then
-	_init()
+ 	next_level()
  end
 end
 
 function _update60()
+ frame=(frame+1)%3600
+ 
+ update_blink()
+ 
 	if mode=="game" then
 		update_game()
 	elseif mode=="start" then
 		update_start()
  elseif mode=="levelover" then
-	update_levelover()
+ 	update_levelover()
 	elseif mode=="gameover" then
 		update_gameover()
-	end
-end
-
-function _draw()
-	if mode=="game" then
-		draw_game()
-	elseif mode=="start" then
-		draw_start()
-	elseif mode=="levelover" then
-		draw_levelover()
-	elseif mode=="gameover" then
-		draw_gameover()
 	end
 end
 -->8
 -- inits + resets
 
 function _init()
-	cls()
+	cls(2)
 	mode   = "start"
-
-	lives  = 1
+	frame  = 0
+	lives  = 0
 	pts    = 0
-
+ shake  = 0
+ fade   = 0
+ blnk_c = 7
 	level  = 0
 	levels = {}
-	levels[1]="xp8/xp8/xp8"
+	levels[1]="b4/b4"
+	--levels[2]="xp8/xs8/xs8"
+	
+	start_timer = -1
 end
 
 function next_level()
@@ -384,23 +446,26 @@ function next_level()
 	brick_h = 4
 
 	level += 1
-	if level > #levels then
-	mode="start"
-	return
+	if level>#levels then
+	 mode="start"
+	 return
  end
 	build_bricks(levels[level])
 	serve_ball()
 end
 
 function serve_ball()
+	balls={}
+	balls[1] = new_ball()
+	
 	ball_r   = 2
 	ball_c   = 10
 	ball_c0  = 10
-	ball_x   = pad_x+flr(pad_w/2)
-	ball_y   = pad_y-ball_r
-	ball_dx  = 1
-	ball_dy  = -1
-	ball_ang = 1
+	balls[1].x  = pad_x+flr(pad_w/2)
+	balls[1].y  = pad_y-ball_r
+	balls[1].dx = 1
+	balls[1].dy = -1
+	balls[1].ang = 1
 
 	ptn_mult = 1
 	chain    = 1
@@ -413,6 +478,16 @@ function serve_ball()
 	reset_pills()
 end
 
+function new_ball()
+ local ball={}
+ ball.x   = 0
+ ball.y   = 0
+ ball.dx  = 0
+ ball.dy  = 0
+ ball.ang = 1
+ return ball
+end
+
 function reset_pills()
 	pills={}
 end
@@ -423,24 +498,24 @@ function build_bricks(lvl)
 
  j=0
  for i=1,#lvl do
-	j+=1
-	c=sub(lvl,i,i)
+	 j+=1
+ 	c=sub(lvl,i,i)
 
-	if c=="x" then last="x" end
-	if is_brick(c) then
-	 last=c
-	 add_brick(j,c)
-	elseif c=="/" then
-	 j=(flr((j-1)/11)+1)*11
-	elseif c>="1" and c<="9" then
-	 for o=1,c+0 do
-		if is_brick(last) then
-		 add_brick(j,last)
-		end
-		j+=1
+	 if c=="x" then last="x" end
+	  if is_brick(c) then
+	   last=c
+	   add_brick(j,c)
+	  elseif c=="/" then
+	   j=(flr((j-1)/11)+1)*11
+	  elseif c>="1" and c<="9" then
+	   for o=1,c+0 do
+		   if is_brick(last) then
+		    add_brick(j,last)
+		   end
+		  j+=1
+	  end
+	  j-=1
 	 end
-	 j-=1
-	end
  end
 end
 
@@ -461,35 +536,40 @@ end
 function is_brick(c)
  local valid={"b","h","i","s","p"}
  for i=1,#valid do
-	if valid[i]==c then
-	 return true
-	end
+	 if valid[i]==c then
+	  return true
+	 end
  end
  return false
 end
 -->8
 -- utils
 
+function copy_ball(b0)
+ local b = {}
+ for k,v in pairs(b0) do
+  b[k]=v
+ end
+ return b
+end
+
 function sign(n)
-	if n<0 then
-	return -1
-	elseif n>0 then
-	return 1
-	end
+	if n<0 then return -1
+	elseif n>0 then return 1	end
 	return 0
 end
 
-function set_ang(ang)
-	ball_ang=ang
+function set_ang(b,ang)
+	b.ang=ang
 	if ang==2 then
-		ball_dx=sign(ball_dx)*0.5
-		ball_dy=sign(ball_dy)*1.3
+		b.dx=sign(b.dx)*0.5
+		b.dy=sign(b.dy)*1.3
 	elseif ang==0 then
-		ball_dx=sign(ball_dx)*1.3
-		ball_dy=sign(ball_dy)*0.5
+		b.dx=sign(b.dx)*1.3
+		b.dy=sign(b.dy)*0.5
 	else
-		ball_dx=sign(ball_dx)
-		ball_dy=sign(ball_dy)
+		b.dx=sign(b.dx)
+		b.dy=sign(b.dy)
 	end
 end
 
@@ -542,7 +622,7 @@ end
 function draw_start()
 	cls(1)
 	print("pico breakout",40,40,11)
-	print("press ❎ to start",33,50,6)
+	print("press ❎ to start",33,50,blnk_c)
 end
 
 function draw_levelover()
@@ -552,9 +632,10 @@ function draw_levelover()
 end
 
 function draw_gameover()
-	rectfill(0,60,128,76,0)
+	rectfill(0,60,128,80,0)
 	print("game over",46,62,8)
-	print("press ❎ to restart",27,68,6)
+	print("score: "..pts,48,68,7)
+	print("press ❎ to restart",27,74,blnk_c)
 end
 
 function draw_game()
@@ -566,31 +647,64 @@ function draw_game()
 	print("◆ "..pts,80,1,7)
 	print("★ "..powerup,110,1,7)
  -- ball & pad
-	circfill(ball_x,ball_y,ball_r,ball_c)
 	rectfill(pad_x,pad_y,pad_x+pad_w,pad_y+pad_h,pad_c)
+
 	if sticky then
-		line(ball_x+ball_dx*4,ball_y+ball_dy*4,ball_x+ball_dx*6,ball_y+ball_dy*6,10)
-	end
+	 local b = balls[1]
+	 local m=0.5*(frame/4%6)+4
+	 pset(b.x+b.dx*m,
+	      b.y+b.dy*m,10)
+	 pset(b.x+b.dx*m*2,
+	      b.y+b.dy*m*2,10)
+ end
+ 
+ -- draw balls
+ for i=1,#balls do
+  local b = balls[i]
+  if b then
+   circfill(b.x,b.y,ball_r,ball_c)
+	 end
+ end
+ 
 	-- draw bricks
 	for i=1,#bricks do
 		if bricks[i].v then
 			rectfill(bricks[i].x,bricks[i].y,bricks[i].x+brick_w,bricks[i].y+brick_h,brick_c[bricks[i].t])
 		end
 	end
+	
 	-- draw pills
 	for i=1,#pills do
-	 local _p=pills[i]
-	if _p then
-	 if _p.t==8 then
-		palt(0,false)
-		palt(15,true)
+	 local p=pills[i]
+	 if p then
+	  if p.t==8 then
+		  palt(0,false)
+		  palt(15,true)
+	  end
+	  spr(p.t,p.x,p.y)
+	  palt()
 	 end
-	 spr(_p.t,_p.x,_p.y)
-	 palt()
-	end
 	end
 end
 
+function _draw()
+ pal()
+ shake_screen()
+ 	
+	if mode=="game" then
+		draw_game()
+	elseif mode=="start" then
+		draw_start()
+	elseif mode=="levelover" then
+		draw_levelover()
+	elseif mode=="gameover" then
+		draw_gameover()
+	end
+	
+	if fade!=0 then
+  fade_pal()
+	end
+end
 -->8
 -- consts
 
@@ -607,6 +721,42 @@ pu.reduce=5
 pu.megaball=6
 pu.multiball=7
 pu.bad=8
+-->8
+-- juice
+
+function shake_screen()
+ local x=shake*(4-rnd(8))
+ local y=shake*(4-rnd(8))
+ camera(x,y)
+ shake *= 0.8
+ if shake<0.05 then shake=0 end
+end
+
+function update_blink()
+ local i=32
+ if start_timer>0 then
+  i=4
+ end
+ if band(frame,i)!=0 then
+  blnk_c=6
+ else
+  blnk_c=7
+ end
+end
+
+function fade_pal()
+ local kmax,col,j,k
+ local p=flr(mid(0,fade,1)*100) 
+ local dpal={0,1,1,2,1,13,6,4,4,9,3,12,1,13,14}
+ for j=1,15 do
+  col=j
+  kmax=(p+(j*1.46))/22
+  for k=1,kmax do
+   col=dpal[col]
+  end
+ 	pal(j,col,1)
+ end
+end
 __gfx__
 0000000007777770077777700777777007777770077777700777777007777770f666666f00000000000000000000000000000000000000000000000000000000
 000000007ccccccc788888887bbbbbbb7eeeeeee79999999722222227ddddddd6000000000000000000000000000000000000000000000000000000000000000
@@ -759,3 +909,4 @@ __sfx__
 000100003505037050370403703039010300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0001000007310093300a3300832004300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000200001f0102202025030290402c0502e0501a0301e020220102f000330003b0003f000390003f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0004000021060210602d0402d04021030210302d0302d03021020210202d0202d02021010210102d0102d01021010210102100021000190001900010d00100000f00019f000e0000e00016f0015f000000000000
